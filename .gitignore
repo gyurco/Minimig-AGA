@@ -28,3 +28,5 @@ greybox_tmp/
 # build script shouldn't be in repo
 build.sh
 
+# ignore generated version file
+rtl/minimig/minimig_version.vh

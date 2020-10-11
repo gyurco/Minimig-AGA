@@ -650,3 +650,4 @@ set_global_assignment -name VERILOG_FILE ../../rtl/sdram/dpram_be_1024x16.v
 set_global_assignment -name VERILOG_FILE ../../rtl/sdram/dpram_256x32.v
 set_global_assignment -name QIP_FILE ../../rtl/minimig/minimig.qip
 set_instance_assignment -name PARTITION_HIERARCHY root_partition -to | -section_id Top
+set_global_assignment -name PRE_FLOW_SCRIPT_FILE "quartus_sh:../../tcl/build_id.tcl"

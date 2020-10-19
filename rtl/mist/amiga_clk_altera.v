@@ -133,7 +133,7 @@ module amiga_clk_altera (
 		altpll_component.clk0_divide_by = 675,
 		altpll_component.clk0_duty_cycle = 50,
 		altpll_component.clk0_multiply_by = 2836,
-		altpll_component.clk0_phase_shift = "-2000",
+		altpll_component.clk0_phase_shift = "-800",
 		altpll_component.clk1_divide_by = 675,
 		altpll_component.clk1_duty_cycle = 50,
 		altpll_component.clk1_multiply_by = 2836,
@@ -266,7 +266,7 @@ endmodule
 // Retrieval info: PRIVATE: OUTPUT_FREQ_UNIT2 STRING "MHz"
 // Retrieval info: PRIVATE: PHASE_RECONFIG_FEATURE_ENABLED STRING "1"
 // Retrieval info: PRIVATE: PHASE_RECONFIG_INPUTS_CHECK STRING "0"
-// Retrieval info: PRIVATE: PHASE_SHIFT0 STRING "-2.00000000"
+// Retrieval info: PRIVATE: PHASE_SHIFT0 STRING "-0.80000000"
 // Retrieval info: PRIVATE: PHASE_SHIFT1 STRING "0.00000000"
 // Retrieval info: PRIVATE: PHASE_SHIFT2 STRING "0.00000000"
 // Retrieval info: PRIVATE: PHASE_SHIFT_STEP_ENABLED_CHECK STRING "0"
@@ -313,7 +313,7 @@ endmodule
 // Retrieval info: CONSTANT: CLK0_DIVIDE_BY NUMERIC "675"
 // Retrieval info: CONSTANT: CLK0_DUTY_CYCLE NUMERIC "50"
 // Retrieval info: CONSTANT: CLK0_MULTIPLY_BY NUMERIC "2836"
-// Retrieval info: CONSTANT: CLK0_PHASE_SHIFT STRING "-2000"
+// Retrieval info: CONSTANT: CLK0_PHASE_SHIFT STRING "-800"
 // Retrieval info: CONSTANT: CLK1_DIVIDE_BY NUMERIC "675"
 // Retrieval info: CONSTANT: CLK1_DUTY_CYCLE NUMERIC "50"
 // Retrieval info: CONSTANT: CLK1_MULTIPLY_BY NUMERIC "2836"
@@ -404,7 +404,7 @@ endmodule
 // Retrieval info: GEN_FILE: TYPE_NORMAL amiga_clk_altera.cmp FALSE
 // Retrieval info: GEN_FILE: TYPE_NORMAL amiga_clk_altera.bsf FALSE
 // Retrieval info: GEN_FILE: TYPE_NORMAL amiga_clk_altera_inst.v FALSE
-// Retrieval info: GEN_FILE: TYPE_NORMAL amiga_clk_altera_bb.v TRUE
+// Retrieval info: GEN_FILE: TYPE_NORMAL amiga_clk_altera_bb.v FALSE
 // Retrieval info: GEN_FILE: TYPE_NORMAL amiga_clk_altera.mif TRUE
 // Retrieval info: GEN_FILE: TYPE_NORMAL amigaclk_pal.mif TRUE
 // Retrieval info: GEN_FILE: TYPE_NORMAL amigaclk_ntsc.mif TRUE

@@ -18,7 +18,7 @@
 --    Device Speed Grade: 8
 --    PLL Scan Chain: Fast PLL (144 bits)
 --    File Name: /home/gyuri/git/MinimigAGA_TC64/rtl/mist/amigaclk_pal.mif
---    Generated: Mon Sep 28 21:38:10 2020
+--    Generated: Mon Oct 19 23:03:28 2020
 
 WIDTH=1;
 DEPTH=144;
@@ -31,8 +31,8 @@ CONTENT BEGIN
 	1    :   0; -- Reserved Bits = 0 (1 bit(s))
 	2    :   0; -- Loop Filter Capacitance = 0 (2 bit(s)) (Setting 0)
 	3    :   0;
-	4    :   1; -- Loop Filter Resistance = 24 (5 bit(s)) (Setting 24)
-	5    :   1;
+	4    :   1; -- Loop Filter Resistance = 16 (5 bit(s)) (Setting 16)
+	5    :   0;
 	6    :   0;
 	7    :   0;
 	8    :   0;
@@ -45,52 +45,52 @@ CONTENT BEGIN
 	15   :   0; -- Charge Pump Current = 1 (3 bit(s)) (Setting 1)
 	16   :   0;
 	17   :   1;
-	18   :   1; -- N counter: Bypass = 1 (1 bit(s))
-	19   :   0; -- N counter: High Count = 0 (8 bit(s))
+	18   :   0; -- N counter: Bypass = 0 (1 bit(s))
+	19   :   0; -- N counter: High Count = 3 (8 bit(s))
 	20   :   0;
 	21   :   0;
 	22   :   0;
 	23   :   0;
 	24   :   0;
-	25   :   0;
-	26   :   0;
-	27   :   0; -- N counter: Odd Division = 0 (1 bit(s))
-	28   :   0; -- N counter: Low Count = 0 (8 bit(s))
+	25   :   1;
+	26   :   1;
+	27   :   1; -- N counter: Odd Division = 1 (1 bit(s))
+	28   :   0; -- N counter: Low Count = 2 (8 bit(s))
 	29   :   0;
 	30   :   0;
 	31   :   0;
 	32   :   0;
 	33   :   0;
-	34   :   0;
+	34   :   1;
 	35   :   0;
 	36   :   0; -- M counter: Bypass = 0 (1 bit(s))
-	37   :   0; -- M counter: High Count = 11 (8 bit(s))
+	37   :   0; -- M counter: High Count = 42 (8 bit(s))
 	38   :   0;
-	39   :   0;
+	39   :   1;
 	40   :   0;
 	41   :   1;
 	42   :   0;
 	43   :   1;
-	44   :   1;
-	45   :   1; -- M counter: Odd Division = 1 (1 bit(s))
-	46   :   0; -- M counter: Low Count = 10 (8 bit(s))
+	44   :   0;
+	45   :   0; -- M counter: Odd Division = 0 (1 bit(s))
+	46   :   0; -- M counter: Low Count = 42 (8 bit(s))
 	47   :   0;
-	48   :   0;
+	48   :   1;
 	49   :   0;
 	50   :   1;
 	51   :   0;
 	52   :   1;
 	53   :   0;
 	54   :   0; -- clk0 counter: Bypass = 0 (1 bit(s))
-	55   :   0; -- clk0 counter: High Count = 3 (8 bit(s))
+	55   :   0; -- clk0 counter: High Count = 2 (8 bit(s))
 	56   :   0;
 	57   :   0;
 	58   :   0;
 	59   :   0;
 	60   :   0;
 	61   :   1;
-	62   :   1;
-	63   :   1; -- clk0 counter: Odd Division = 1 (1 bit(s))
+	62   :   0;
+	63   :   0; -- clk0 counter: Odd Division = 0 (1 bit(s))
 	64   :   0; -- clk0 counter: Low Count = 2 (8 bit(s))
 	65   :   0;
 	66   :   0;
@@ -100,15 +100,15 @@ CONTENT BEGIN
 	70   :   1;
 	71   :   0;
 	72   :   0; -- clk1 counter: Bypass = 0 (1 bit(s))
-	73   :   0; -- clk1 counter: High Count = 3 (8 bit(s))
+	73   :   0; -- clk1 counter: High Count = 2 (8 bit(s))
 	74   :   0;
 	75   :   0;
 	76   :   0;
 	77   :   0;
 	78   :   0;
 	79   :   1;
-	80   :   1;
-	81   :   1; -- clk1 counter: Odd Division = 1 (1 bit(s))
+	80   :   0;
+	81   :   0; -- clk1 counter: Odd Division = 0 (1 bit(s))
 	82   :   0; -- clk1 counter: Low Count = 2 (8 bit(s))
 	83   :   0;
 	84   :   0;
@@ -118,22 +118,22 @@ CONTENT BEGIN
 	88   :   1;
 	89   :   0;
 	90   :   0; -- clk2 counter: Bypass = 0 (1 bit(s))
-	91   :   0; -- clk2 counter: High Count = 10 (8 bit(s))
+	91   :   0; -- clk2 counter: High Count = 8 (8 bit(s))
 	92   :   0;
 	93   :   0;
 	94   :   0;
 	95   :   1;
 	96   :   0;
-	97   :   1;
+	97   :   0;
 	98   :   0;
 	99   :   0; -- clk2 counter: Odd Division = 0 (1 bit(s))
-	100  :   0; -- clk2 counter: Low Count = 10 (8 bit(s))
+	100  :   0; -- clk2 counter: Low Count = 8 (8 bit(s))
 	101  :   0;
 	102  :   0;
 	103  :   0;
 	104  :   1;
 	105  :   0;
-	106  :   1;
+	106  :   0;
 	107  :   0;
 	108  :   1; -- clk3 counter: Bypass = 1 (1 bit(s))
 	109  :   0; -- clk3 counter: High Count = 0 (8 bit(s))

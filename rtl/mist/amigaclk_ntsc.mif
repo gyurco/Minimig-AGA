@@ -18,7 +18,7 @@
 --    Device Speed Grade: 8
 --    PLL Scan Chain: Fast PLL (144 bits)
 --    File Name: /home/gyuri/git/MinimigAGA_TC64/rtl/mist/amigaclk_ntsc.mif
---    Generated: Mon Sep 28 18:27:39 2020
+--    Generated: Mon Oct 19 23:01:35 2020
 
 WIDTH=1;
 DEPTH=144;

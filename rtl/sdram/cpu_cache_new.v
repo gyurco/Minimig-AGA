@@ -20,21 +20,22 @@ module cpu_cache_new (
   input  wire           cpu_cs,         // cpu activity
   input  wire [ 25-1:0] cpu_adr,        // cpu address
   input  wire [  2-1:0] cpu_bs,         // cpu byte selects
-  input  wire [  2-1:0] cpu_bs_hi,      // cpu byte selects (1st word of a longword write)
   input  wire           cpu_32bit,      // cpu 32 bit write
-  input  wire           cpu_32bitwait,  // cpu wait for 2nd word
   input  wire           cpu_we,         // cpu write
   input  wire           cpu_ir,         // cpu instruction read
   input  wire           cpu_dr,         // cpu data read
-  input  wire [ 32-1:0] cpu_dat_w,      // cpu write data
+  input  wire [ 16-1:0] cpu_dat_w,      // cpu write data
   output wire [ 16-1:0] cpu_dat_r,      // cpu read data
   output                cpu_ack,        // cpu acknowledge
-  // writebuffer
-  output reg            wb_en,          // writebuffer enable
   // sdram
   input  wire [ 16-1:0] sdr_dat_r,      // sdram read data
   output reg            sdr_read_req,   // sdram read request from cache
   input  wire           sdr_read_ack,   // sdram read acknowledge to cache
+  output reg  [ 25-1:1] sdr_adr,        // sdram address
+  output reg  [ 32-1:0] sdr_dat_w,      // sdram write data
+  output reg  [  4-1:0] sdr_dqm_w,      // sdram write byte selects (active low)
+  output reg            sdr_write_req,  // sdram write request from cache
+  input  wire           sdr_write_ack,  // sdram write acknowledge to cache
   // snoop
   input  wire           snoop_act,      // snoop act (write only - just update existing data in cache)
   input  wire [ 25-1:0] snoop_adr,      // chip address
@@ -49,10 +50,12 @@ reg           cache_init_done;
 // state
 reg  [ 4-1:0] cpu_sm_state;
 reg  [ 4-1:0] sdr_sm_state;
+reg           write_ena;
 // state signals
 reg           fill;
 reg           cpu_acked;
 reg           cpu_cache_ack;
+wire          cpu_32bit_ena;
 reg  [11-1:0] cpu_sm_adr;
 wire [11-1:0] cpu_sm_adr_next = { cpu_sm_adr[10:3], cpu_sm_adr[2:0] + 2'b01 };
 reg           cpu_sm_itag_we;
@@ -198,16 +201,17 @@ wire          sdr_dtag1_valid;
 localparam [3:0]
   CPU_SM_INIT  = 4'd0,
   CPU_SM_IDLE  = 4'd1,
-  CPU_SM_WRITE_HIWORD  = 4'd2,
-  CPU_SM_WRITE = 4'd3,
-  CPU_SM_WB    = 4'd4,
-  CPU_SM_READ  = 4'd5,
-  CPU_SM_WAIT  = 4'd6,
-  CPU_SM_SDWAI = 4'd7,
-  CPU_SM_FILL1 = 4'd8,
-  CPU_SM_FILL2 = 4'd9,
-  CPU_SM_FILLW = 4'd10;
- 
+  CPU_SM_WAIT_LOWORD = 4'd2,
+  CPU_SM_WRITE_32BIT = 4'd3,
+  CPU_SM_WRITE = 4'd4,
+  CPU_SM_WB    = 4'd5,
+  CPU_SM_READ  = 4'd6,
+  CPU_SM_WAIT  = 4'd7,
+  CPU_SM_SDWAI = 4'd8,
+  CPU_SM_FILL1 = 4'd9,
+  CPU_SM_FILL2 = 4'd10,
+  CPU_SM_FILLW = 4'd11;
+
 // sdram-side state machine
 localparam [3:0]
   SDR_SM_INIT0 = 4'd0,
@@ -254,7 +258,8 @@ assign cpu_adr_tag = cpu_adr[24:12];  // tag, 13 bits
 
 always @(posedge clk) cpu_cacheline_match <= cpu_adr[24:4] == cpu_cacheline_adr && !cpu_cacheline_dirty;
 assign cpu_cacheline_valid = cpu_cacheline_match && (cpu_sm_state == CPU_SM_IDLE) && (cpu_ir || cpu_dr) && !cache_inhibit;
-assign cpu_ack = cpu_cache_ack || cpu_cacheline_valid;
+assign cpu_32bit_ena = cpu_32bit && cpu_cs && write_ena;
+assign cpu_ack = cpu_cache_ack || cpu_cacheline_valid || cpu_32bit_ena;
 assign cpu_dat_r = {cpu_cacheline_hi[cpu_adr_blk], cpu_cacheline_lo[cpu_adr_blk]};
 
 // cpu side state machine
@@ -262,7 +267,8 @@ always @ (posedge clk) begin
   if (rst) begin
     fill              <= #1 1'b0;
     sdr_read_req      <= #1 1'b0;
-    wb_en             <= #1 1'b0;
+    sdr_write_req     <= #1 1'b0;
+    write_ena         <= #1 1'b0;
     cpu_cache_ack     <= #1 1'b0;
     cpu_sm_state      <= #1 CPU_SM_INIT;
     cpu_sm_itag_we    <= #1 1'b0;
@@ -278,7 +284,7 @@ always @ (posedge clk) begin
     // default values
     fill              <= #1 1'b0;
     sdr_read_req      <= #1 1'b0;
-    wb_en             <= #1 1'b0;
+    write_ena         <= #1 1'b0;
     cpu_sm_itag_we    <= #1 1'b0;
     cpu_sm_dtag_we    <= #1 1'b0;
     cpu_sm_iram0_we   <= #1 1'b0;
@@ -299,10 +305,22 @@ always @ (posedge clk) begin
       end
       CPU_SM_IDLE : begin
         cpu_adr_blk_ptr <= #1 cpu_adr_blk;
+        write_ena <= #1 !sdr_write_req && !sdr_write_ack;
         // waiting for CPU access
         if (cpu_cs) begin
           if (cpu_we) begin
-            if (!cpu_32bitwait) cpu_sm_state <= #1 cpu_32bit ? CPU_SM_WRITE_HIWORD : CPU_SM_WRITE;
+            if (write_ena) begin
+              sdr_adr <= #1 cpu_adr[24:1];
+              sdr_dqm_w <= #1 {2'b11, ~cpu_bs};
+              sdr_dat_w <= #1 {cpu_dat_w, cpu_dat_w};
+              if (cpu_32bit) begin
+                cpu_cache_ack <= #1 1'b1;
+                cpu_sm_state <= #1 CPU_SM_WAIT_LOWORD;
+              end else begin
+                sdr_write_req <= #1 1'b1;
+                cpu_sm_state <= #1 CPU_SM_WRITE;
+              end
+            end
           end else if (!cpu_cacheline_valid) begin
             cpu_adr_blk_ptr <= #1 cpu_adr_blk_ptr_next;
             cpu_sm_state <= #1 CPU_SM_READ;
@@ -315,27 +333,34 @@ always @ (posedge clk) begin
             cpu_sm_state <= #1 CPU_SM_IDLE;
         end
       end
-      CPU_SM_WRITE_HIWORD : begin
-        if (cpu_adr_prev[24:4] != cpu_cacheline_adr && !cpu_cacheline_dirty)
+      CPU_SM_WAIT_LOWORD : begin
+        if (!cpu_cs) cpu_sm_state <= #1 CPU_SM_WRITE_32BIT;
+      end
+      CPU_SM_WRITE_32BIT : if (cpu_cs) begin
+        sdr_dqm_w[3:2] <= #1 ~cpu_bs;
+        sdr_dat_w[31:16] <= #1 cpu_dat_w;
+        sdr_write_req <= #1 1'b1;
+
+        if (!cpu_cacheline_match)
           cpu_cacheline_dirty <= #1 1'b1; //invalidate
         else begin
-          if (cpu_bs_hi[0]) cpu_cacheline_lo[cpu_adr_prev[3:1]] <= #1 cpu_dat_w[23:16]; //update low byte
-          if (cpu_bs_hi[1]) cpu_cacheline_hi[cpu_adr_prev[3:1]] <= #1 cpu_dat_w[31:24]; //update hi byte
-          if (cpu_bs[0])    cpu_cacheline_lo[cpu_adr[3:1]]      <= #1 cpu_dat_w[ 7: 0]; //update low byte
-          if (cpu_bs[1])    cpu_cacheline_hi[cpu_adr[3:1]]      <= #1 cpu_dat_w[15: 8]; //update hi byte
+          if (!sdr_dqm_w[0]) cpu_cacheline_lo[cpu_adr_prev[3:1]] <= #1 sdr_dat_w[ 7: 0]; //update low byte
+          if (!sdr_dqm_w[1]) cpu_cacheline_hi[cpu_adr_prev[3:1]] <= #1 sdr_dat_w[15: 8]; //update hi byte
+          if (cpu_bs[0])     cpu_cacheline_lo[cpu_adr[3:1]]      <= #1 cpu_dat_w[ 7: 0]; //update low byte
+          if (cpu_bs[1])     cpu_cacheline_hi[cpu_adr[3:1]]      <= #1 cpu_dat_w[15: 8]; //update hi byte
         end
+
         // on hit update cache, on miss no update neccessary; tags don't get updated on writes
-        cpu_adr_blk_ptr <= #1 cpu_adr_blk_ptr - 1'd1;
         if (!cpu_adr_blk[0]) begin
           // unaligned 32 bit write, hi word
-          cpu_sm_bs <= #1 {cpu_bs_hi, 2'b00};
-          cpu_sm_mem_dat_w[31:16] <= #1 cpu_dat_w[31:16];
+          cpu_sm_bs <= #1 {~sdr_dqm_w[1:0], 2'b00};
+          cpu_sm_mem_dat_w[31:16] <= #1 sdr_dat_w[15:0];
           cpu_sm_state <= #1 CPU_SM_WRITE;
         end else begin
           // aligned 32 bit write, do it in one step
-          cpu_sm_bs <= #1 {cpu_bs, cpu_bs_hi};
-          cpu_sm_mem_dat_w <= #1 {cpu_dat_w[15:0], cpu_dat_w[31:16]};
-          wb_en <= #1 1'b1;
+          cpu_cache_ack <= #1 1'b1;
+          cpu_sm_bs <= #1 {cpu_bs, ~sdr_dqm_w[1:0]};
+          cpu_sm_mem_dat_w <= #1 {cpu_dat_w, sdr_dat_w[15:0]};
           cpu_sm_state <= #1 CPU_SM_WB;
         end
         cpu_sm_iram0_we <= #1 itag0_match && itag0_valid /*&& !cc_fr*/;
@@ -350,19 +375,20 @@ always @ (posedge clk) begin
           if (cpu_bs[0]) cpu_cacheline_lo[cpu_adr[3:1]] <= #1 cpu_dat_w[7:0]; //update low byte
           if (cpu_bs[1]) cpu_cacheline_hi[cpu_adr[3:1]] <= #1 cpu_dat_w[15:8]; //update hi byte
         end
+
         // on hit update cache, on miss no update neccessary; tags don't get updated on writes
         cpu_adr_blk_ptr <= #1 cpu_adr_blk;
         cpu_sm_bs <= #1 cpu_adr_blk[0] ? {cpu_bs, 2'b00} : {2'b00, cpu_bs};
-        cpu_sm_mem_dat_w <= #1 { cpu_dat_w[15:0], cpu_dat_w[15:0] };
+        cpu_sm_mem_dat_w <= #1 { cpu_dat_w, cpu_dat_w };
         cpu_sm_iram0_we <= #1 itag0_match && itag0_valid /*&& !cc_fr*/;
         cpu_sm_iram1_we <= #1 itag1_match && itag1_valid /*&& !cc_fr*/;
         cpu_sm_dram0_we <= #1 dtag0_match && dtag0_valid /*&& !cc_fr*/;
         cpu_sm_dram1_we <= #1 dtag1_match && dtag1_valid /*&& !cc_fr*/;
-        wb_en <= #1 1'b1;
+        cpu_cache_ack <= #1 1'b1;
+
         cpu_sm_state <= #1 CPU_SM_WB;
       end
       CPU_SM_WB : begin
-        wb_en <= #1 1'b1;
         if (!cpu_cs) cpu_sm_state <= #1 CPU_SM_IDLE;
       end
       CPU_SM_READ : begin
@@ -507,6 +533,9 @@ always @ (posedge clk) begin
         end
       end
     endcase
+
+    // when the SDRAM ack'ed the write, lower the request
+    if (sdr_write_ack) sdr_write_req <= #1 1'b0;
 
     // when CPU lowers its request signal, lower ack too
     if (!cpu_cs) cpu_cache_ack <= #1 1'b0;

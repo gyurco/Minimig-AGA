@@ -184,19 +184,15 @@ reg  [16-1:0] chip48_2;
 reg  [16-1:0] chip48_3;
 wire          longword_en;
 reg           longword_wait;
-reg           writebuffer_req;
-reg           writebuffer_ena;
-reg  [25-1:1] writebufferAddr;
-reg  [16-1:0] writebufferWR;
+wire          writebuffer_req;
+wire [25-1:1] writebufferAddr;
+wire [16-1:0] writebufferWR;
 reg  [16-1:0] writebufferWR_reg;
-reg  [ 2-1:0] writebuffer_dqm;
-reg  [16-1:0] writebufferWR2;
+wire [ 2-1:0] writebuffer_dqm;
+wire [16-1:0] writebufferWR2;
 reg  [16-1:0] writebufferWR2_reg;
-reg  [ 2-1:0] writebuffer_dqm2;
-wire          writebuffer_cache_ack;
+wire [ 2-1:0] writebuffer_dqm2;
 reg           writebuffer_hold;
-reg           writebuffer_canfinish;
-reg  [ 3-1:0] writebuffer_state;
 reg  [25-1:1] cpuAddr_r; // registered CPU address - cpuAddr must be stable one cycle before cpuCSn
 
 
@@ -533,19 +529,21 @@ cpu_cache_new cpu_cache (
 	.cpu_cs           (!cpuCSn),                      // cpu activity
 	.cpu_adr          ({cpuAddr, 1'b0}),              // cpu address
 	.cpu_bs           ({!cpuU, !cpuL}),               // cpu byte selects
-	.cpu_bs_hi        (~writebuffer_dqm),             // cpu byte selects (1st word of a longword write)
-	.cpu_32bit        (cache_32bitwrite),             // cpu 32 bit write
-	.cpu_32bitwait    (longword_wait),                // cpu wait for 2nd word
+	.cpu_32bit        (longword_en),                  // cpu 32 bit write
 	.cpu_we           (&cpustate[1:0]),               // cpu write
 	.cpu_ir           (!(|cpustate[1:0])),            // cpu instruction read
 	.cpu_dr           (cpustate[1] && !cpustate[0]),  // cpu data read
-	.cpu_dat_w        ({writebufferWR,cpuWR}),        // cpu write data
+	.cpu_dat_w        (cpuWR),                        // cpu write data
 	.cpu_dat_r        (cpuRD),                        // cpu read data
 	.cpu_ack          (ccachehit),                    // cpu acknowledge
-	.wb_en            (writebuffer_cache_ack),        // writebuffer enable
 	.sdr_dat_r        (sdata_reg),                    // sdram read data
 	.sdr_read_req     (cache_req),                    // sdram read request from cache
 	.sdr_read_ack     (readcache_fill),               // sdram read acknowledge to cache
+	.sdr_adr          (writebufferAddr),
+	.sdr_dat_w        ({writebufferWR2, writebufferWR}),
+	.sdr_dqm_w        ({writebuffer_dqm2, writebuffer_dqm}),
+	.sdr_write_req    (writebuffer_req),
+	.sdr_write_ack    (writebuffer_hold),
 	.snoop_act        (snoop_act),                    // snoop act (write only - just update existing data in cache)
 	.snoop_adr        ({1'b0, chipAddr, 1'b0}),       // snoop address
 	.snoop_dat_w      (chipWR)                        // snoop write data
@@ -581,89 +579,7 @@ TwoWayCache mytwc (
 `endif
 
 assign longword_en = cpuLongword && cpuAddr_r[3:1]!=3'b111 && cpustate[1:0]==2'b11;
-
-//// writebuffer ////
-// write buffer, enables CPU to continue while a write is in progress
-always @ (posedge sysclk) begin
-	if(!reset) begin
-		writebuffer_req   <= #1 1'b0;
-		writebuffer_ena   <= #1 1'b0;
-		writebuffer_state <= #1 WAITING;
-		cache_32bitwrite  <= #1 1'b0;
-		longword_wait     <= #1 1'b0;
-	end else begin
-		case(writebuffer_state)
-		WAITING : begin
-			longword_wait <= #1 longword_en;
-			// CPU write cycle, no cycle already pending
-			if(!cpuCSn && cpustate[1:0] == 2'b11) begin
-				writebufferAddr <= #1 cpuAddr_r[24:1];
-				writebufferWR   <= #1 cpuWR;
-				writebuffer_dqm <= #1 {cpuU, cpuL};
-				writebuffer_dqm2 <= #1 2'b11;
-				writebuffer_canfinish <= #1 1'b0;
-				if(longword_en) begin
-					// If we're looking at a longword write, acknowledge the first word
-					// and wait for the second half...
-					// (Exclude longword writes that cross a burst boundary)
-					cache_32bitwrite  <= #1 1'b1;
-					writebuffer_ena   <= #1 1'b1;
-					writebuffer_state <= #1 WAITLONGWORD;
-					longword_wait     <= #1 1'b0;
-				end else begin
-					// Not a longword write
-					writebuffer_req <= #1 1'b1;
-					if(writebuffer_cache_ack) begin	// Wait for read cache to note the write
-						writebuffer_ena   <= #1 1'b1;
-						writebuffer_state <= #1 WRITE1;
-					end
-				end
-			end
-		end
-		WAITLONGWORD : begin
-			if(!cpuCSn && cpustate[1:0] == 2'b11 && !writebuffer_ena) begin
-				writebufferWR2   <= #1 cpuWR;
-				writebuffer_dqm2 <= #1 {cpuU, cpuL};
-				writebuffer_req <= #1 1'b1;
-				if(writebuffer_cache_ack) begin 	// Wait for read cache to note the write
-					writebuffer_ena   <= #1 1'b1;
-					writebuffer_state <= #1 WRITE1;
-				end
-			end
-		end
-		WRITE1 : begin
-			// note when the cpu unpaused, otherwise it's possible to re-start
-			// the writebuffer cycle in the same request
-			if(cpuCSn) writebuffer_canfinish <= #1 1'b1;
-			cache_32bitwrite <= #1 1'b0;
-			if(writebuffer_hold) begin
-				// The SDRAM controller has picked up the request
-				writebuffer_req   <= #1 1'b0;
-				writebuffer_state <= #1 WRITE2;
-			end
-		end
-		WRITE2 : begin
-			if(cpuCSn) writebuffer_canfinish <= #1 1'b1;
-			if(!writebuffer_hold) begin
-				// Wait for write cycle to finish, so it's safe to update the signals
-				writebuffer_state <= #1 (cpuCSn || writebuffer_canfinish) ? WAITING : FINISH;
-			end
-		end
-		FINISH: if (cpuCSn) writebuffer_state <= #1 WAITING;
-
-		default : begin
-			writebuffer_state <= #1 WAITING;
-		end
-		endcase
-
-		if(cpuCSn) begin
-			// the CPU has unpaused, so clear the ack signal
-			writebuffer_ena <= #1 1'b0;
-		end
-	end
-end
-
-assign cpuena = ccachehit || writebuffer_ena || (longword_wait && !cpuCSn);
+assign cpuena = ccachehit;
 assign readcache_fill = (cache_fill_1 && slot1_type == CPU_READCACHE) || (cache_fill_2 && slot2_type == CPU_READCACHE);
 
 

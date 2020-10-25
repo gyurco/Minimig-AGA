@@ -309,6 +309,10 @@ always @ (posedge clk) begin
         // waiting for CPU access
         if (cpu_cs) begin
           if (cpu_we) begin
+            if (!cpu_cacheline_match) cpu_cacheline_dirty <= #1 1'b1; //invalidate
+            if (cpu_bs[0]) cpu_cacheline_lo[cpu_adr_blk_ptr] <= #1 cpu_dat_w[ 7: 0]; //update low byte
+            if (cpu_bs[1]) cpu_cacheline_hi[cpu_adr_blk_ptr] <= #1 cpu_dat_w[15: 8]; //update hi byte
+
             if (write_ena) begin
               sdr_adr <= #1 cpu_adr[24:1];
               sdr_dqm_w <= #1 {2'b11, ~cpu_bs};
@@ -341,14 +345,8 @@ always @ (posedge clk) begin
         sdr_dat_w[31:16] <= #1 cpu_dat_w;
         sdr_write_req <= #1 1'b1;
 
-        if (!cpu_cacheline_match)
-          cpu_cacheline_dirty <= #1 1'b1; //invalidate
-        else begin
-          if (!sdr_dqm_w[0]) cpu_cacheline_lo[cpu_adr_prev[3:1]] <= #1 sdr_dat_w[ 7: 0]; //update low byte
-          if (!sdr_dqm_w[1]) cpu_cacheline_hi[cpu_adr_prev[3:1]] <= #1 sdr_dat_w[15: 8]; //update hi byte
-          if (cpu_bs[0])     cpu_cacheline_lo[cpu_adr[3:1]]      <= #1 cpu_dat_w[ 7: 0]; //update low byte
-          if (cpu_bs[1])     cpu_cacheline_hi[cpu_adr[3:1]]      <= #1 cpu_dat_w[15: 8]; //update hi byte
-        end
+        if (cpu_bs[0])     cpu_cacheline_lo[cpu_adr_blk]      <= #1 cpu_dat_w[ 7: 0]; //update low byte
+        if (cpu_bs[1])     cpu_cacheline_hi[cpu_adr_blk]      <= #1 cpu_dat_w[15: 8]; //update hi byte
 
         // on hit update cache, on miss no update neccessary; tags don't get updated on writes
         if (!cpu_adr_blk[0]) begin
@@ -369,13 +367,6 @@ always @ (posedge clk) begin
         cpu_sm_dram1_we <= #1 dtag1_match && dtag1_valid /*&& !cc_fr*/;
       end
       CPU_SM_WRITE : begin
-        if (!cpu_cacheline_match)
-          cpu_cacheline_dirty <= #1 1'b1; //invalidate
-        else begin
-          if (cpu_bs[0]) cpu_cacheline_lo[cpu_adr[3:1]] <= #1 cpu_dat_w[7:0]; //update low byte
-          if (cpu_bs[1]) cpu_cacheline_hi[cpu_adr[3:1]] <= #1 cpu_dat_w[15:8]; //update hi byte
-        end
-
         // on hit update cache, on miss no update neccessary; tags don't get updated on writes
         cpu_adr_blk_ptr <= #1 cpu_adr_blk;
         cpu_sm_bs <= #1 cpu_adr_blk[0] ? {cpu_bs, 2'b00} : {2'b00, cpu_bs};

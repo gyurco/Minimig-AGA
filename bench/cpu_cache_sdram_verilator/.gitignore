@@ -1,0 +1,4 @@
+sdram.vcd
+sdram.sav
+obj_dir
+cpu_cache_sdram_tb

@@ -38,7 +38,7 @@ module sdram_ctrl(
   output wire           sd_ras,
   output wire           sd_cas,
   output reg  [  2-1:0] dqm,
-  inout  reg  [ 16-1:0] sdata,
+  inout       [ 16-1:0] sdata,
   // host
   input  wire [ 32-1:0] hostWR,
   input  wire [ 24-1:2] hostAddr,
@@ -142,26 +142,17 @@ wire [16-1:0] datain;
 reg  [25-1:0] slot1_addr;
 reg  [25-1:0] slot2_addr;
 reg  [16-1:0] sdata_reg;
+reg  [16-1:0] sdata_out;
+reg           sdata_oe;
 reg  [25-1:2] zmAddr;
 reg           zce;
 reg           zena;
-reg  [32-1:0] hostRDd;
 wire [64-1:0] ccache;
 wire [25-1:0] ccache_addr;
 wire          ccache_fill;
 wire          ccachehit;
-wire [ 4-1:0] cvalid;
-wire          cequal;
-wire [ 2-1:0] cpuStated;
-wire [16-1:0] cpuRDd;
 wire          cpuLongword;
 wire          cpuCSn;
-wire [64-1:0] dcache;
-wire [25-1:0] dcache_addr;
-wire          dcache_fill;
-wire          dcachehit;
-wire [ 4-1:0] dvalid;
-wire          dequal;
 reg  [ 8-1:0] hostslot_cnt;
 reg  [ 8-1:0] reset_cnt;
 reg           reset;
@@ -170,7 +161,6 @@ reg           clk7_enD;
 reg  [ 9-1:0] refreshcnt;
 reg           refresh_pending;
 reg  [ 4-1:0] sdram_state;
-wire [ 2-1:0] pass;
 // writebuffer
 reg           slot1_write;
 reg           slot2_write;
@@ -178,7 +168,6 @@ reg  [ 3-1:0] slot1_type = IDLE;
 reg  [ 3-1:0] slot2_type = IDLE;
 reg  [ 2-1:0] slot1_bank;
 reg  [ 2-1:0] slot2_bank;
-reg           cache_32bitwrite;
 wire          cache_req;
 wire          readcache_fill;
 reg           cache_fill_1;
@@ -187,7 +176,6 @@ reg  [16-1:0] chip48_1;
 reg  [16-1:0] chip48_2;
 reg  [16-1:0] chip48_3;
 wire          longword_en;
-reg           longword_wait;
 wire          writebuffer_req;
 wire [25-1:1] writebufferAddr;
 wire [16-1:0] writebufferWR;
@@ -197,10 +185,6 @@ wire [16-1:0] writebufferWR2;
 reg  [16-1:0] writebufferWR2_reg;
 wire [ 2-1:0] writebuffer_dqm2;
 reg           writebuffer_hold;
-
-reg           cache_writeback_req;
-reg           cache_writeback_data_req;
-reg  [16-1:0] cache_writeback_data;
 
 reg  [25-1:1] cpuAddr_r; // registered CPU address - cpuAddr must be stable one cycle before cpuCSn
 
@@ -572,7 +556,8 @@ always @ (posedge sysclk) begin
 			ph9  : chipRD   <= #1 sdata_reg;
 			ph10 : chip48_1 <= #1 sdata_reg;
 			ph11 : chip48_2 <= #1 sdata_reg;
-			 ph12 : chip48_3 <= #1 sdata_reg;
+			ph12 : chip48_3 <= #1 sdata_reg;
+			default: ;
 		endcase
 	end
 end
@@ -711,15 +696,16 @@ end
 // 22 downto 10: row
 // 9 downto 1: column
 
-always @ (posedge sysclk) begin
-	sdata                       <= 16'bzzzzzzzzzzzzzzzz;
+assign sdata = sdata_oe ? sdata_out : 16'bzzzzzzzzzzzzzzzz;
 
+always @ (posedge sysclk) begin
 	if(!reset) begin
 		refresh_pending           <= #1 1'b0;
 		slot1_type                <= #1 IDLE;
 		slot2_type                <= #1 IDLE;
 		refreshcnt                <= #1 REFRESHSCHEDULE;
 	end
+	sdata_oe                    <= #1 1'b0;
 	sd_cmd                      <= #1 CMD_INHIBIT;
 	sdaddr                      <= #1 13'b0;
 	ba                          <= #1 2'b00;
@@ -765,7 +751,8 @@ always @ (posedge sysclk) begin
 				if(slot2_write) begin // Write cycle
 					sdaddr[12:3]        <= #1 {1'b0, 1'b0, 1'b0, 1'b0, slot2_addr[9:4]}; // Can't auto-precharge, since we need to interrupt the burst
 					sdaddr[2:0]         <= #1 slot2_addr[3:1];
-					sdata               <= #1 writebufferWR_reg;
+					sdata_out           <= #1 writebufferWR_reg;
+					sdata_oe            <= #1 1'b1;
 					ba                  <= #1 slot2_bank;
 					sd_cmd              <= #1 CMD_WRITE;
 					dqm                 <= #1 slot2_dqm;
@@ -847,7 +834,7 @@ always @ (posedge sysclk) begin
 					slot1_dqm           <= #1 2'b00;
 					slot1_dqm2          <= #1 2'b00;
 					sd_cmd              <= #1 CMD_ACTIVE;
-					slot1_addr          <= #1 audAddr;
+					slot1_addr          <= #1 {2'b00, audAddr};
 				end
 				else if(zreq) begin
 					hostslot_cnt        <= #1 8'b00001111;
@@ -868,7 +855,8 @@ always @ (posedge sysclk) begin
 				if(slot2_write) begin // Write cycle (2nd word)
 					sdaddr[12:3]        <= #1 {1'b0, 1'b0, 1'b1, 1'b0, slot2_addr[9:4]}; // auto-precharge
 					sdaddr[2:0]         <= #1 slot2_addr[3:1] + 1'd1;
-					sdata               <= #1 writebufferWR2_reg;
+					sdata_out           <= #1 writebufferWR2_reg;
+					sdata_oe            <= #1 1'b1;
 					ba                  <= #1 slot2_bank;
 					dqm                 <= #1 slot2_dqm2;
 					sd_cmd              <= #1 CMD_WRITE;
@@ -911,10 +899,11 @@ always @ (posedge sysclk) begin
 					dqm                 <= #1 slot1_dqm;
 					sd_cmd              <= #1 CMD_WRITE;
 					case (slot1_type)
-						CHIP:           sdata   <= #1 chipWR;
-						CPU_WRITECACHE:	sdata   <= #1 writebufferWR_reg;
-						default :       sdata   <= #1 hostWR[31:16];
+						CHIP:           sdata_out <= #1 chipWR;
+						CPU_WRITECACHE:	sdata_out <= #1 writebufferWR_reg;
+						default :       sdata_out <= #1 hostWR[31:16];
 					endcase
+					sdata_oe            <= #1 1'b1;
 					writebuffer_hold    <= #1 1'b0; // indicate to WriteBuffer that it's safe to accept the next write
 				end
 				cache_fill_1          <= #1 1'b1;
@@ -970,9 +959,10 @@ always @ (posedge sysclk) begin
 					sdaddr[2:0]     <= #1 slot1_addr[3:1] + 1'd1;
 					ba              <= #1 slot1_bank;
 					case (slot1_type)
-						CPU_WRITECACHE:	sdata           <= #1 writebufferWR2_reg;
-						default :       sdata           <= #1 hostWR[15:0];
+						CPU_WRITECACHE:	sdata_out <= #1 writebufferWR2_reg;
+						default :       sdata_out <= #1 hostWR[15:0];
 					endcase
+					sdata_oe            <= #1 1'b1;
 					sd_cmd              <= #1 CMD_WRITE;
 					dqm                 <= #1 slot1_dqm2;
 				end

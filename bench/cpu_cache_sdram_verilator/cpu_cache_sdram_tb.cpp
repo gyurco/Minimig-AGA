@@ -68,11 +68,20 @@ char random_test() {
 	char ok = 1;
 	std::list<int> addresses;
 	std::cout << "memory random fill" << std::endl;
-	for (int i=0; i<10000; i++)
+	for (int i=0; i<1000; i++)
 	{
-		int a = rand() & 0xfffffc;
+		int a = (rand() & 0xfffc) | 0xf00000;
 		addresses.push_back(a);
 		cpuWrite(a,a & 0xffff);
+	std::cout << "memory read back after random fill" << std::endl;
+	for (std::list<int>::iterator it=addresses.begin(); it != addresses.end(); ++it)
+	{
+		int data = cpuRead(*it, 1);
+		if ((*it & 0xffff) != data) {
+			std::cout << "error: " << std::setw(8) << std::setfill('0') << std::hex << *it << ": " << data << std::dec << std::endl;
+			ok = 0;
+		}
+	}
 	}
 
 	std::cout << "memory read back after random fill" << std::endl;
@@ -114,12 +123,12 @@ int main(int argc, char **argv) {
 	tb->reset = 1;
 	tick(1);
 	tick(0);
-
+/*
 	if (basic_test())
 		std::cout << "Basic test: OK" << std::endl;
 	else
 		std::cout << "Basic test: ERROR" << std::endl;
-
+*/
 	if (random_test())
 		std::cout << "Random test: OK" << std::endl;
 	else
